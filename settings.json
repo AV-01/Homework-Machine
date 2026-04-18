@@ -1,0 +1,17 @@
+{
+    "X_MIN": 80.0,
+    "X_MAX": 230.0,
+    "Y_MIN": 40.0,
+    "Y_MAX": 235.0,
+    "Z_SAFE": 3.5,
+    "Z_DRAW": 1.52,
+    "F_TRAVEL": 3000.0,
+    "F_DRAW": 2000.0,
+    "F_Z": 1000,
+    "FLIP_X": true,
+    "FLIP_Y": true,
+    "LINE_SPACING": 7.1,
+    "TOP_MARGIN": 7.1,
+    "LINE_RATIO": 0.65,
+    "LINED_PAPER_MODE": true
+}

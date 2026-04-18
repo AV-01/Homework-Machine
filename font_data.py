@@ -89,7 +89,7 @@ HERSHEY_SIMPLEX = {
     'z': [-8, 8, [(-6, 2), (6, 2), (-6, -10), (6, -10)], [(-2, -4), (2, -4)]],
 }
 
-def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0):
+def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0, line_height=None):
     """
     Converts a string of text into a list of strokes (list of points).
     Handles line wrapping and basic vertical layout.
@@ -97,13 +97,18 @@ def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_widt
     font_size: Height of character in mm (Hershey Simplex height is approx 21 units).
     start_x, start_y: Initial machine coordinates for top-left.
     max_width: Maximum width in mm before wrapping.
+    line_height: Explicit line spacing in mm. If None, defaults to 1.5 * font_size.
     """
     scale = font_size / 21.0
-    line_height = font_size * 1.5
+    if line_height is None:
+        line_height = font_size * 1.5
     
     strokes = []
+    # Pin baseline (py = -10) to start_y
+    # my = cursor_y + (py * scale) -> start_y = cursor_y + (-10 * scale)
+    cursor_y_initial = start_y + (10 * scale)
     cursor_x = start_x
-    cursor_y = start_y - font_size # Start Y is top of character
+    cursor_y = cursor_y_initial
     
     # Simple word wrapping by splitting on space
     lines = text.split('\n')
