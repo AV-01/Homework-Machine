@@ -69,13 +69,17 @@ class GCodeDrawer:
         ctrl_frame.pack(fill="x", padx=20)
         
         tk.Label(ctrl_frame, text="Font Size (mm):").pack(side="left")
-        self.font_size_val = tk.DoubleVar(value=10.0)
-        self.font_size_scale = tk.Scale(ctrl_frame, from_=3, to_=30, resolution=0.1, orient="horizontal", variable=self.font_size_val, length=150, command=lambda x: self.preview_text())
+        self.font_size_val = tk.DoubleVar(value=round(self.settings["LINE_SPACING"] * self.settings["LINE_RATIO"], 2))
+        self.font_size_scale = tk.Scale(ctrl_frame, from_=3, to_=30, resolution=0.1, orient="horizontal", variable=self.font_size_val, length=120, command=lambda x: self.preview_text())
         self.font_size_scale.pack(side="left", padx=5)
         
         self.lined_mode_var = tk.BooleanVar(value=self.settings["LINED_PAPER_MODE"])
-        self.lined_cb = tk.Checkbutton(ctrl_frame, text="Lined Paper Mode (Auto-Fit)", variable=self.lined_mode_var, command=self.on_toggle_lined_mode)
-        self.lined_cb.pack(side="left", padx=10)
+        self.lined_cb = tk.Checkbutton(ctrl_frame, text="Lined Paper Mode", variable=self.lined_mode_var, command=self.on_toggle_lined_mode)
+        self.lined_cb.pack(side="left", padx=5)
+
+        self.draw_lines_var = tk.BooleanVar(value=self.settings["DRAW_GUIDE_LINES"])
+        self.draw_lines_cb = tk.Checkbutton(ctrl_frame, text="Draw Guide Lines", variable=self.draw_lines_var)
+        self.draw_lines_cb.pack(side="left", padx=5)
 
         self.preview_canvas = tk.Canvas(self.text_tab, width=self.canvas_w, height=self.canvas_h, bg="#f9f9f9", highlightthickness=1)
         self.preview_canvas.pack(padx=20, pady=10)
@@ -92,7 +96,7 @@ class GCodeDrawer:
         tk.Label(container, text="Machine Constants", font=("Arial", 10, "bold")).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0,10))
         self.entries = {}
         fields = [("X Min", "X_MIN"), ("X Max", "X_MAX"), ("Y Min", "Y_MIN"), ("Y Max", "Y_MAX"),
-                  ("Z Safe", "Z_SAFE"), ("Z Draw", "Z_DRAW"), ("Travel F", "F_TRAVEL"), ("Draw F", "F_DRAW")]
+                  ("Z Safe", "Z_SAFE"), ("Z Draw", "Z_DRAW"), ("Travel F", "F_TRAVEL"), ("Draw F", "F_DRAW"), ("Trace F", "F_TRACE")]
         
         for i, (label, key) in enumerate(fields):
             r, c = divmod(i, 2)
@@ -147,6 +151,7 @@ class GCodeDrawer:
             self.settings["TOP_MARGIN"] = float(self.top_margin_ent.get())
             self.settings["LINE_RATIO"] = float(self.line_ratio_ent.get())
             self.settings["LINED_PAPER_MODE"] = self.lined_mode_var.get()
+            self.settings["DRAW_GUIDE_LINES"] = self.draw_lines_var.get()
             
             settings_manager.save_settings(self.settings)
             self.update_canvas_dims()
@@ -211,11 +216,31 @@ class GCodeDrawer:
         return self.transform_point(mx, my)
 
     def export_gcode(self, mode):
+        process_strokes = []
+        stroke_speeds = [] # Track which speed to use for each stroke
+
+        # Handle guide lines if mode is text and setting is enabled
+        if mode == "text" and self.draw_lines_var.get():
+            spacing = self.settings["LINE_SPACING"]
+            top_m = self.settings["TOP_MARGIN"]
+            curr_y_mm = self.settings["Y_MAX"] - top_m
+            while curr_y_mm >= self.settings["Y_MIN"]:
+                # Full width line
+                line_stroke = [(self.settings["X_MIN"], curr_y_mm), (self.settings["X_MAX"], curr_y_mm)]
+                transformed_stroke = [self.transform_point(p[0], p[1]) for p in line_stroke]
+                process_strokes.append(transformed_stroke)
+                stroke_speeds.append(self.settings["F_TRACE"])
+                curr_y_mm -= spacing
+
         if mode == "draw":
-            process_strokes = [[self.canvas_to_machine(p[0], p[1]) for p in s] for s in self.manual_strokes]
-        else:
+            for s in self.manual_strokes:
+                process_strokes.append([self.canvas_to_machine(p[0], p[1]) for p in s])
+                stroke_speeds.append(self.settings["F_DRAW"])
+        else: # mode == "text"
             self.preview_text()
-            process_strokes = [[self.transform_point(p[0], p[1]) for p in s] for s in self.text_strokes]
+            for s in self.text_strokes:
+                process_strokes.append([self.transform_point(p[0], p[1]) for p in s])
+                stroke_speeds.append(self.settings["F_DRAW"])
 
         if not process_strokes:
             messagebox.showwarning("Warning", "No content!")
@@ -229,31 +254,26 @@ class GCodeDrawer:
                 f.write("; Generated G-Code\n")
                 f.write("M302 S0\nM211 S1\nG21\nG90\nG28\nM420 S1\n")
                 f.write(f"G0 Z{self.settings['Z_SAFE']} F{self.settings['F_Z']}\n")
-                for stroke in process_strokes:
-                    if not (self.settings["X_MIN"]-0.5 <= stroke[0][0] <= self.settings["X_MAX"]+0.5 and 
-                            self.settings["Y_MIN"]-0.5 <= stroke[0][1] <= self.settings["Y_MAX"]+0.5): continue
-                    f.write(f"G0 X{stroke[0][0]:.2f} Y{stroke[0][1]:.2f} F{self.settings['F_TRAVEL']}\n")
+                
+                for idx, stroke in enumerate(process_strokes):
+                    current_speed = stroke_speeds[idx]
+                    
+                    # Truncation check
+                    start_pt = stroke[0]
+                    if not (self.settings["X_MIN"]-0.5 <= start_pt[0] <= self.settings["X_MAX"]+0.5 and 
+                            self.settings["Y_MIN"]-0.5 <= start_pt[1] <= self.settings["Y_MAX"]+0.5):
+                        continue
+                        
+                    f.write(f"G0 X{start_pt[0]:.2f} Y{start_pt[1]:.2f} F{self.settings['F_TRAVEL']}\n")
                     f.write(f"G0 Z{self.settings['Z_DRAW']} F{self.settings['F_Z']}\n")
-                    for pt in stroke[1:]: f.write(f"G1 X{pt[0]:.2f} Y{pt[1]:.2f} F{self.settings['F_DRAW']}\n")
+                    for pt in stroke[1:]:
+                        f.write(f"G1 X{pt[0]:.2f} Y{pt[1]:.2f} F{current_speed}\n")
                     f.write(f"G0 Z{self.settings['Z_SAFE']} F{self.settings['F_Z']}\n")
+                
                 f.write(f"G0 Z10 F3000\nG0 X0 Y0 F3000\nM84\n")
             messagebox.showinfo("Success", "G-code exported!")
         except Exception as e:
             messagebox.showerror("Error", f"Failed: {e}")
-
-    def start_stroke(self, event): self.current_stroke = [(event.x, event.y)]
-    def draw_stroke(self, event):
-        if self.current_stroke:
-            x1, y1 = self.current_stroke[-1]
-            if 0 <= event.x <= self.canvas_w and 0 <= event.y <= self.canvas_h:
-                self.canvas.create_line(x1, y1, event.x, event.y, fill="black", width=2)
-                self.current_stroke.append((event.x, event.y))
-    def end_stroke(self, event):
-        if len(self.current_stroke) > 1: self.manual_strokes.append(self.current_stroke)
-        self.current_stroke = []
-    def clear_canvas(self):
-        self.canvas.delete("all")
-        self.manual_strokes = []
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -16,7 +16,9 @@ DEFAULT_SETTINGS = {
     "LINE_SPACING": 7.1, # College ruled standard
     "TOP_MARGIN": 10.0,
     "LINE_RATIO": 0.75,
-    "LINED_PAPER_MODE": False
+    "LINED_PAPER_MODE": False,
+    "F_TRACE": 3000,
+    "DRAW_GUIDE_LINES": False
 }
 
 SETTINGS_FILE = "settings.json"
