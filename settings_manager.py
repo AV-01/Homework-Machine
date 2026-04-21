@@ -18,7 +18,15 @@ DEFAULT_SETTINGS = {
     "LINE_RATIO": 0.75,
     "LINED_PAPER_MODE": False,
     "F_TRACE": 3000,
-    "DRAW_GUIDE_LINES": False
+    "DRAW_GUIDE_LINES": False,
+    "ROTATE_90": False,
+    "NOZZLE_TEMP": 200.0,
+    "BED_TEMP": 60.0,
+    "EXTRUSION_RATIO": 0.033,
+    "HOTEND_Z": 0.28,
+    "FLOAT_OFFSET": 2.5,
+    "LEFT_MARGIN": 5.0,
+    "TOOL_MODE": "Pen"
 }
 
 SETTINGS_FILE = "settings.json"

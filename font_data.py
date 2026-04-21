@@ -106,7 +106,7 @@ def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_widt
     strokes = []
     # Pin baseline (py = -10) to start_y
     # my = cursor_y + (py * scale) -> start_y = cursor_y + (-10 * scale)
-    cursor_y_initial = start_y + (10 * scale)
+    cursor_y_initial = start_y
     cursor_x = start_x
     cursor_y = cursor_y_initial
     
