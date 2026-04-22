@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handwriting Font Creator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Font Management -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Font Studio</h1>
+            </div>
+            
+            <div class="font-selector">
+                <label for="font-select">Active Font</label>
+                <select id="font-select">
+                    <option value="">No fonts found...</option>
+                </select>
+                <button id="btn-new-font" class="btn btn-secondary">New Font</button>
+            </div>
+
+            <div class="character-list">
+                <h3>Characters</h3>
+                <div class="char-grid" id="char-grid">
+                    <!-- Javascript will populate this with A-Z, a-z, 0-9 etc -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="toolbar">
+                <div class="char-input-group">
+                    <label for="char-input">Drawing:</label>
+                    <input type="text" id="char-input" maxlength="1" value="A" autocomplete="off">
+                </div>
+                
+                <div class="actions">
+                    <button id="btn-undo" class="btn btn-icon" title="Undo (Ctrl+Z)">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                    </button>
+                    <button id="btn-clear" class="btn btn-secondary">Clear</button>
+                    <button id="btn-delete" class="btn btn-danger">Delete</button>
+                    <button id="btn-save" class="btn btn-primary">Save Character</button>
+                </div>
+            </header>
+
+            <div class="canvas-container">
+                <canvas id="drawing-canvas" width="800" height="600"></canvas>
+                
+                <!-- Guides overlay (drawn via JS but we can have CSS indicators too) -->
+                <div class="guide-labels">
+                    <div class="label" style="top: calc(50% - 120px);">Cap Height</div>
+                    <div class="label" style="top: calc(50% - 50px);">Mean Line</div>
+                    <div class="label" style="top: 50%;">Baseline</div>
+                    <div class="label" style="top: calc(50% + 90px);">Descender</div>
+                </div>
+            </div>
+            
+            <div class="status-bar" id="status-bar">Ready</div>
+        </main>
+    </div>
+
+    <!-- Modal for New Font -->
+    <div id="modal-new-font" class="modal">
+        <div class="modal-content">
+            <h2>Create New Font</h2>
+            <input type="text" id="new-font-name" placeholder="e.g., my_cursive" autocomplete="off">
+            <div class="modal-actions">
+                <button id="btn-cancel-modal" class="btn btn-secondary">Cancel</button>
+                <button id="btn-confirm-modal" class="btn btn-primary">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

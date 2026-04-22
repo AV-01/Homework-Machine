@@ -3,7 +3,11 @@ font_data.py - Hershey Simplex Font Data and Layout Engine
 Embedded subset of Hershey Simplex for an MVP pen plotter.
 """
 
+import os
+import json
+
 # Character data format: [left_boundary, right_boundary, stroke1, stroke2, ...]
+
 # Each stroke is a list of (x, y) points. Coordinates are relative to character center.
 # Y increases UP in Hershey data, so we'll flip it for our screen (Y increases DOWN).
 # Scaling: Hershey Simplex is roughly 21 units tall (-9 to 12).
@@ -89,16 +93,51 @@ HERSHEY_SIMPLEX = {
     'z': [-8, 8, [(-6, 2), (6, 2), (-6, -10), (6, -10)], [(-2, -4), (2, -4)]],
 }
 
-def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0, line_height=None):
+def get_fonts_dir():
+    return os.path.join(os.path.dirname(__file__), "fonts")
+
+def list_available_fonts():
+    """Returns list of all available fonts including custom JSON ones."""
+    fonts = ["Hershey Simplex"]
+    fonts_dir = get_fonts_dir()
+    if os.path.exists(fonts_dir):
+        for f in os.listdir(fonts_dir):
+            if f.endswith(".json"):
+                fonts.append(f[:-5])
+    return fonts
+
+def load_font(font_name):
+    """Returns a font dictionary, defaulting to Hershey Simplex."""
+    if font_name == "Hershey Simplex" or not font_name:
+        return HERSHEY_SIMPLEX
+        
+    path = os.path.join(get_fonts_dir(), f"{font_name}.json")
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+                # Fallback to Hershey for missing chars
+                combined = HERSHEY_SIMPLEX.copy()
+                combined.update(data)
+                return combined
+        except:
+            pass
+    return HERSHEY_SIMPLEX
+
+def get_text_strokes(text, font_dict=None, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0, line_height=None):
     """
     Converts a string of text into a list of strokes (list of points).
     Handles line wrapping and basic vertical layout.
     
+    font_dict: Dictionary of character data. If None, uses HERSHEY_SIMPLEX.
     font_size: Height of character in mm (Hershey Simplex height is approx 21 units).
     start_x, start_y: Initial machine coordinates for top-left.
     max_width: Maximum width in mm before wrapping.
     line_height: Explicit line spacing in mm. If None, defaults to 1.5 * font_size.
     """
+    if font_dict is None:
+        font_dict = HERSHEY_SIMPLEX
+        
     scale = font_size / 21.0
     if line_height is None:
         line_height = font_size * 1.5
@@ -119,7 +158,7 @@ def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_widt
             # Calculate word width
             word_width = 0
             for char in word:
-                data = HERSHEY_SIMPLEX.get(char, HERSHEY_SIMPLEX.get('?', [-10, 10]))
+                data = font_dict.get(char, font_dict.get('?', [-10, 10]))
                 word_width += (data[1] - data[0]) * scale
             
             # Wrap if necessary
@@ -129,7 +168,7 @@ def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_widt
             
             # Draw word
             for char in word:
-                data = HERSHEY_SIMPLEX.get(char, HERSHEY_SIMPLEX.get('?', [-10, 10]))
+                data = font_dict.get(char, font_dict.get('?', [-10, 10]))
                 char_left = data[0]
                 char_right = data[1]
                 char_width = (char_right - char_left) * scale
@@ -151,7 +190,7 @@ def get_text_strokes(text, font_size=10.0, start_x=80.0, start_y=220.0, max_widt
                 cursor_x += char_width
             
             # Add space after word
-            space_data = HERSHEY_SIMPLEX[' ']
+            space_data = font_dict.get(' ', [-10, 10])
             cursor_x += (space_data[1] - space_data[0]) * scale
             
         # New line after each block in lines

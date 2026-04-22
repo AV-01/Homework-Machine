@@ -60,8 +60,18 @@ class GCodeDrawer:
         tk.Label(self.text_tab, text="Enter Homework Text:", font=("Arial", 9, "bold")).pack(anchor="w", padx=20, pady=(5,0))
         self.text_entry = scrolledtext.ScrolledText(self.text_tab, height=4)
         self.text_entry.pack(padx=20, pady=5, fill="x")
+        
+        ff = tk.Frame(self.text_tab)
+        ff.pack(fill="x", padx=20, pady=2)
+        tk.Label(ff, text="Font:").pack(side="left")
+        self.font_var = tk.StringVar(value="Hershey Simplex")
+        self.font_combo = ttk.Combobox(ff, textvariable=self.font_var, values=font_data.list_available_fonts(), state="readonly", width=30)
+        self.font_combo.pack(side="left", padx=5)
+        self.font_combo.bind("<<ComboboxSelected>>", lambda e: self.preview_text())
+        tk.Button(ff, text="Refresh Fonts", command=self.update_font_list).pack(side="left", padx=5)
+
         cf = tk.Frame(self.text_tab)
-        cf.pack(fill="x", padx=20)
+        cf.pack(fill="x", padx=20, pady=2)
         tk.Label(cf, text="Size (mm):").pack(side="left")
         self.font_size_val = tk.DoubleVar(value=round(self.settings["LINE_SPACING"] * self.settings["LINE_RATIO"], 2))
         self.fs_scale = tk.Scale(cf, from_=3, to_=30, resolution=0.1, orient="horizontal", variable=self.font_size_val, length=120, command=lambda x: self.preview_text())
@@ -157,6 +167,14 @@ class GCodeDrawer:
                 f.write(f"G28\nM420 S1\nG0 Z{self.settings['Z_SAFE']} F1000\nG0 X{self.settings['X_MIN']} Y{self.settings['Y_MAX']} F3000\n")
             messagebox.showinfo("Done", "Calibration file saved.")
 
+    def update_font_list(self):
+        curr = self.font_var.get()
+        fonts = font_data.list_available_fonts()
+        self.font_combo['values'] = fonts
+        if curr not in fonts:
+            self.font_var.set("Hershey Simplex")
+        self.preview_text()
+
     def preview_text(self):
         content = self.text_entry.get("1.0", tk.END).strip()
         self.preview_canvas.delete("all")
@@ -184,7 +202,8 @@ class GCodeDrawer:
         max_w = (self.settings["Y_MAX"] - self.settings["Y_MIN"] - lm) if is_rotated else (self.settings["X_MAX"] - self.settings["X_MIN"] - lm)
         # Start on second line (skewed by -s) and float up by float_offset
         start_y = (-s + fo) if self.lined_mode_var.get() else fo
-        self.text_strokes = font_data.get_text_strokes(content, font_size=fs, start_x=lm, start_y=start_y, max_width=max_w, line_height=lh)
+        font_dict = font_data.load_font(self.font_var.get())
+        self.text_strokes = font_data.get_text_strokes(content, font_dict=font_dict, font_size=fs, start_x=lm, start_y=start_y, max_width=max_w, line_height=lh)
         for stroke in self.text_strokes:
             pts = []
             for px, py in stroke:
