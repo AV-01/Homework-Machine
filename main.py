@@ -58,17 +58,37 @@ class GCodeDrawer:
 
     def setup_text_tab(self):
         tk.Label(self.text_tab, text="Enter Homework Text:", font=("Arial", 9, "bold")).pack(anchor="w", padx=20, pady=(5,0))
-        self.text_entry = scrolledtext.ScrolledText(self.text_tab, height=4)
-        self.text_entry.pack(padx=20, pady=5, fill="x")
+        self.text_entry = scrolledtext.ScrolledText(self.text_tab, height=2)
+        self.text_entry.pack(padx=20, pady=2, fill="x")
         
         ff = tk.Frame(self.text_tab)
         ff.pack(fill="x", padx=20, pady=2)
-        tk.Label(ff, text="Font:").pack(side="left")
-        self.font_var = tk.StringVar(value="Hershey Simplex")
-        self.font_combo = ttk.Combobox(ff, textvariable=self.font_var, values=font_data.list_available_fonts(), state="readonly", width=30)
-        self.font_combo.pack(side="left", padx=5)
-        self.font_combo.bind("<<ComboboxSelected>>", lambda e: self.preview_text())
+        tk.Label(ff, text="Fonts (Ctrl+Click):").pack(side="left")
+        
+        self.font_list_frame = tk.Frame(ff)
+        self.font_list_frame.pack(side="left", padx=5)
+        self.font_listbox = tk.Listbox(self.font_list_frame, selectmode="multiple", height=3, exportselection=False, width=25)
+        self.font_listbox.pack(side="left", fill="y")
+        self.font_scrollbar = tk.Scrollbar(self.font_list_frame, orient="vertical", command=self.font_listbox.yview)
+        self.font_scrollbar.pack(side="right", fill="y")
+        self.font_listbox.config(yscrollcommand=self.font_scrollbar.set)
+        self.font_listbox.bind("<<ListboxSelect>>", lambda e: self.preview_text())
+        
         tk.Button(ff, text="Refresh Fonts", command=self.update_font_list).pack(side="left", padx=5)
+        
+        # Humanize Control
+        hf = tk.Frame(ff)
+        hf.pack(side="left", padx=15)
+        tk.Label(hf, text="Humanize Chaos:").pack(side="top")
+        self.humanize_var = tk.DoubleVar(value=0.0)
+        self.humanize_scale = tk.Scale(hf, from_=0.0, to_=1.0, resolution=0.1, orient="horizontal", variable=self.humanize_var, length=100, command=lambda x: self.preview_text())
+        self.humanize_scale.pack(side="top")
+
+        # Action Buttons (Moved to top to prevent falling off screen)
+        tb_frame = tk.Frame(ff)
+        tb_frame.pack(side="right", padx=10)
+        tk.Button(tb_frame, text="Export Text G-Code", command=lambda: self.export_gcode("text"), bg="#2196F3", fg="white", font=("Arial", 9, "bold"), width=18).pack(side="top", pady=2)
+        tk.Button(tb_frame, text="Refresh Preview \u21bb", command=self.preview_text, width=18).pack(side="bottom", pady=2)
 
         cf = tk.Frame(self.text_tab)
         cf.pack(fill="x", padx=20, pady=2)
@@ -78,14 +98,11 @@ class GCodeDrawer:
         self.fs_scale.pack(side="left", padx=5)
         self.lined_mode_var = tk.BooleanVar(value=self.settings["LINED_PAPER_MODE"])
         tk.Checkbutton(cf, text="Lined mode", variable=self.lined_mode_var, command=self.on_toggle_lined_mode).pack(side="left", padx=5)
-        self.draw_lines_var = tk.BooleanVar(value=self.settings["DRAW_GUIDE_LINES"])
+        self.draw_lines_var = tk.BooleanVar(value=False)
         tk.Checkbutton(cf, text="Draw guides", variable=self.draw_lines_var).pack(side="left", padx=5)
+        
         self.preview_canvas = tk.Canvas(self.text_tab, width=self.canvas_w, height=self.canvas_h, bg="#f9f9f9", highlightthickness=1)
-        self.preview_canvas.pack(padx=20, pady=10)
-        bf = tk.Frame(self.text_tab)
-        bf.pack(fill="x", pady=5)
-        tk.Button(bf, text="Refresh Preview", command=self.preview_text).pack(side="left", padx=20)
-        tk.Button(bf, text="Export Text G-Code", command=lambda: self.export_gcode("text"), bg="#2196F3", fg="white").pack(side="right", padx=20)
+        self.preview_canvas.pack(padx=20, pady=5)
 
     def setup_settings_tab(self):
         container = tk.Frame(self.settings_tab)
@@ -128,8 +145,22 @@ class GCodeDrawer:
         self.left_margin_ent = tk.Entry(container, width=10)
         self.left_margin_ent.insert(0, str(self.settings["LEFT_MARGIN"]))
         self.left_margin_ent.grid(row=10, column=3, sticky="w", pady=2)
+        
+        tk.Label(container, text="Chaos Settings (Requires Save & Apply)", font=("Arial", 10, "bold")).grid(row=11, column=0, columnspan=4, sticky="w", pady=(15,10))
+        chaos_fields = [("Scale Var", "CHAOS_SCALE"), ("Bounce Var", "CHAOS_BOUNCE"), 
+                        ("Base Tilt", "CHAOS_BASE_TILT"), ("Rot Var", "CHAOS_ROT"), 
+                        ("Drift Var", "CHAOS_DRIFT"), ("Kerning Var", "CHAOS_KERNING"), 
+                        ("Space Var", "CHAOS_SPACE")]
+        for i, (label, key) in enumerate(chaos_fields):
+            r, c = divmod(i, 2)
+            tk.Label(container, text=label).grid(row=r+12, column=c*2, sticky="e", padx=5, pady=2)
+            ent = tk.Entry(container, width=10)
+            ent.insert(0, str(self.settings.get(key, 0.0)))
+            ent.grid(row=r+12, column=c*2+1, sticky="w", padx=5, pady=2)
+            self.entries[key] = ent
+            
         bg = tk.Frame(container)
-        bg.grid(row=11, column=0, columnspan=4, pady=20)
+        bg.grid(row=20, column=0, columnspan=4, pady=20)
         tk.Button(bg, text="Save & Apply All", command=self.save_and_apply, bg="#FF9800", fg="white").pack(side="left", padx=10)
         tk.Button(bg, text="Move Pen to Origin (X/Y)", command=self.move_to_origin).pack(side="left", padx=10)
 
@@ -168,11 +199,13 @@ class GCodeDrawer:
             messagebox.showinfo("Done", "Calibration file saved.")
 
     def update_font_list(self):
-        curr = self.font_var.get()
+        sel = [self.font_listbox.get(i) for i in self.font_listbox.curselection()]
         fonts = font_data.list_available_fonts()
-        self.font_combo['values'] = fonts
-        if curr not in fonts:
-            self.font_var.set("Hershey Simplex")
+        self.font_listbox.delete(0, tk.END)
+        for i, f in enumerate(fonts):
+            self.font_listbox.insert(tk.END, f)
+            if f in sel or (not sel and f == "Hershey Simplex"):
+                self.font_listbox.selection_set(i)
         self.preview_text()
 
     def preview_text(self):
@@ -202,8 +235,17 @@ class GCodeDrawer:
         max_w = (self.settings["Y_MAX"] - self.settings["Y_MIN"] - lm) if is_rotated else (self.settings["X_MAX"] - self.settings["X_MIN"] - lm)
         # Start on second line (skewed by -s) and float up by float_offset
         start_y = (-s + fo) if self.lined_mode_var.get() else fo
-        font_dict = font_data.load_font(self.font_var.get())
-        self.text_strokes = font_data.get_text_strokes(content, font_dict=font_dict, font_size=fs, start_x=lm, start_y=start_y, max_width=max_w, line_height=lh)
+        
+        # Load fonts
+        sel_indices = self.font_listbox.curselection()
+        if not sel_indices:
+            font_dicts = [font_data.HERSHEY_SIMPLEX]
+        else:
+            font_dicts = [font_data.load_font(self.font_listbox.get(i)) for i in sel_indices]
+            
+        humanize_val = self.humanize_var.get()
+        
+        self.text_strokes = font_data.get_text_strokes(content, font_dicts=font_dicts, font_size=fs, start_x=lm, start_y=start_y, max_width=max_w, line_height=lh, humanize=humanize_val, chaos_settings=self.settings)
         for stroke in self.text_strokes:
             pts = []
             for px, py in stroke:

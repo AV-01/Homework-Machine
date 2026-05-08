@@ -26,7 +26,14 @@ DEFAULT_SETTINGS = {
     "HOTEND_Z": 0.28,
     "FLOAT_OFFSET": 2.5,
     "LEFT_MARGIN": 5.0,
-    "TOOL_MODE": "Pen"
+    "TOOL_MODE": "Pen",
+    "CHAOS_SCALE": 0.15,
+    "CHAOS_BOUNCE": 1.5,
+    "CHAOS_BASE_TILT": 10.0,
+    "CHAOS_ROT": 6.0,
+    "CHAOS_DRIFT": 0.15,
+    "CHAOS_KERNING": 0.6,
+    "CHAOS_SPACE": 0.5
 }
 
 SETTINGS_FILE = "settings.json"

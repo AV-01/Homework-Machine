@@ -5,6 +5,8 @@ Embedded subset of Hershey Simplex for an MVP pen plotter.
 
 import os
 import json
+import random
+import math
 
 # Character data format: [left_boundary, right_boundary, stroke1, stroke2, ...]
 
@@ -116,27 +118,36 @@ def load_font(font_name):
         try:
             with open(path, "r") as f:
                 data = json.load(f)
-                # Fallback to Hershey for missing chars
-                combined = HERSHEY_SIMPLEX.copy()
-                combined.update(data)
-                return combined
+                return data
         except:
             pass
     return HERSHEY_SIMPLEX
 
-def get_text_strokes(text, font_dict=None, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0, line_height=None):
+def rotate_point(x, y, cx, cy, angle_deg):
+    angle_rad = math.radians(angle_deg)
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    nx = cos_a * (x - cx) - sin_a * (y - cy) + cx
+    ny = sin_a * (x - cx) + cos_a * (y - cy) + cy
+    return nx, ny
+
+def get_text_strokes(text, font_dicts=None, font_size=10.0, start_x=80.0, start_y=220.0, max_width=150.0, line_height=None, humanize=0.0, chaos_settings=None):
     """
     Converts a string of text into a list of strokes (list of points).
     Handles line wrapping and basic vertical layout.
     
-    font_dict: Dictionary of character data. If None, uses HERSHEY_SIMPLEX.
+    font_dicts: List of dictionaries of character data. If None, uses [HERSHEY_SIMPLEX].
     font_size: Height of character in mm (Hershey Simplex height is approx 21 units).
     start_x, start_y: Initial machine coordinates for top-left.
     max_width: Maximum width in mm before wrapping.
     line_height: Explicit line spacing in mm. If None, defaults to 1.5 * font_size.
+    humanize: Value from 0.0 to 1.0 to add random variation to strokes.
+    chaos_settings: Dictionary of configuration values for humanize chaos.
     """
-    if font_dict is None:
-        font_dict = HERSHEY_SIMPLEX
+    if font_dicts is None:
+        font_dicts = [HERSHEY_SIMPLEX]
+    elif isinstance(font_dicts, dict):
+        font_dicts = [font_dicts]
         
     scale = font_size / 21.0
     if line_height is None:
@@ -153,12 +164,19 @@ def get_text_strokes(text, font_dict=None, font_size=10.0, start_x=80.0, start_y
     lines = text.split('\n')
     
     for line in lines:
+        line_drift = 0.0 # Accumulates vertically across the line
         words = line.split(' ')
         for word in words:
-            # Calculate word width
+            # Calculate approx word width for wrapping
             word_width = 0
             for char in word:
-                data = font_dict.get(char, font_dict.get('?', [-10, 10]))
+                valid_for_width = [f for f in font_dicts if char in f]
+                if valid_for_width:
+                    data = valid_for_width[0][char]
+                elif char in HERSHEY_SIMPLEX:
+                    data = HERSHEY_SIMPLEX[char]
+                else:
+                    data = [-10, 10]
                 word_width += (data[1] - data[0]) * scale
             
             # Wrap if necessary
@@ -168,30 +186,72 @@ def get_text_strokes(text, font_dict=None, font_size=10.0, start_x=80.0, start_y
             
             # Draw word
             for char in word:
-                data = font_dict.get(char, font_dict.get('?', [-10, 10]))
+                valid_fonts = [f for f in font_dicts if char in f]
+                if valid_fonts:
+                    active_font = random.choice(valid_fonts)
+                    data = active_font[char]
+                elif char in HERSHEY_SIMPLEX:
+                    data = HERSHEY_SIMPLEX[char]
+                else:
+                    data = [-10, 10]
+                    
                 char_left = data[0]
                 char_right = data[1]
-                char_width = (char_right - char_left) * scale
                 
-                # Offset cursor to align with left boundary
-                char_offset_x = cursor_x - (char_left * scale)
+                # Humanization Base Metrics
+                char_scale = 1.0
+                char_bounce = 0.0
+                char_rot = 0.0
+                kerning = 0.0
+                
+                if humanize > 0:
+                    c_scale = chaos_settings.get("CHAOS_SCALE", 0.15) if chaos_settings else 0.15
+                    c_bounce = chaos_settings.get("CHAOS_BOUNCE", 1.5) if chaos_settings else 1.5
+                    c_base_tilt = chaos_settings.get("CHAOS_BASE_TILT", 10.0) if chaos_settings else 10.0
+                    c_rot = chaos_settings.get("CHAOS_ROT", 6.0) if chaos_settings else 6.0
+                    c_drift = chaos_settings.get("CHAOS_DRIFT", 0.15) if chaos_settings else 0.15
+                    c_kerning = chaos_settings.get("CHAOS_KERNING", 0.6) if chaos_settings else 0.6
+                    
+                    char_scale = random.uniform(1.0 - (c_scale * humanize), 1.0 + (c_scale * humanize))
+                    char_bounce = random.uniform(-c_bounce * humanize, c_bounce * humanize)
+                    # Add a consistent rightward tilt (forward slant) plus some randomness
+                    char_rot = (c_base_tilt * humanize) + random.uniform(-c_rot * humanize, c_rot * humanize)
+                    line_drift += random.uniform(-c_drift * humanize, c_drift * humanize)
+                    kerning = random.uniform(-c_kerning * humanize, c_kerning * humanize)
+
+                char_width = (char_right - char_left) * scale * char_scale
+                char_offset_x = cursor_x - (char_left * scale * char_scale) + kerning
+                
+                cx_center = char_offset_x + ((char_right + char_left)/2.0 * scale * char_scale)
+                cy_center = cursor_y + char_bounce + line_drift
                 
                 # Add strokes for character
                 for path in data[2:]:
                     stroke = []
                     for px, py in path:
-                        # Hershey Y increases UP, we want it translated to current cursor_y
-                        # Hershey data is approx -9 to +12. 0 is baseline.
-                        mx = char_offset_x + (px * scale)
-                        my = cursor_y + (py * scale)
+                        mx = char_offset_x + (px * scale * char_scale)
+                        my = cy_center + (py * scale * char_scale)
+                        
+                        if char_rot != 0:
+                            mx, my = rotate_point(mx, my, cx_center, cy_center, char_rot)
+                            
+                        if humanize > 0:
+                            mx += random.uniform(-0.1 * humanize, 0.1 * humanize)
+                            my += random.uniform(-0.1 * humanize, 0.1 * humanize)
+                            
                         stroke.append((mx, my))
                     strokes.append(stroke)
                 
-                cursor_x += char_width
+                cursor_x += char_width + kerning
             
             # Add space after word
-            space_data = font_dict.get(' ', [-10, 10])
-            cursor_x += (space_data[1] - space_data[0]) * scale
+            space_data = font_dicts[0].get(' ', [-10, 10])
+            space_width = (space_data[1] - space_data[0]) * scale
+            if humanize > 0:
+                 c_space = chaos_settings.get("CHAOS_SPACE", 0.5) if chaos_settings else 0.5
+                 # In handwriting space widths vary aggressively
+                 space_width *= random.uniform(1.0 - (c_space * humanize), 1.0 + (c_space * humanize))
+            cursor_x += space_width
             
         # New line after each block in lines
         cursor_x = start_x
